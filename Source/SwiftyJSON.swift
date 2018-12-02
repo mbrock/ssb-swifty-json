@@ -225,7 +225,7 @@ public struct JSON {
 
     /// Private object
     fileprivate var rawArray: [Any] = []
-    fileprivate var rawDictionary: [String: Any] = [:]
+    fileprivate var rawDictionary: [(String, Any)] = []
     fileprivate var rawString: String = ""
     fileprivate var rawNumber: NSNumber = 0
     fileprivate var rawNull: NSNull = NSNull()
@@ -276,9 +276,9 @@ public struct JSON {
             case let array as [Any]:
                 type = .array
                 self.rawArray = array
-            case let dictionary as [String: Any]:
+            case let dictionary as DictionaryLiteral<String, Any>:
                 type = .dictionary
-                self.rawDictionary = dictionary
+                self.rawDictionary = dictionary.map { ($0.key, $0.value) }
             default:
                 type = .unknown
                 error = SwiftyJSONError.unsupportedType
@@ -312,7 +312,7 @@ private func unwrap(_ object: Any) -> Any {
 
 public enum Index<T: Any>: Comparable {
     case array(Int)
-    case dictionary(DictionaryIndex<String, T>)
+    case dictionary(Int)
     case null
 
     static public func == (lhs: Index, rhs: Index) -> Bool {
@@ -449,7 +449,7 @@ extension JSON {
         get {
             var r = JSON.null
             if self.type == .dictionary {
-                if let o = self.rawDictionary[key] {
+                if let (_, o) = self.rawDictionary.first(where: { $0.0 == key }) {
                     r = JSON(o)
                 } else {
                     r.error = SwiftyJSONError.notExist
@@ -461,7 +461,11 @@ extension JSON {
         }
         set {
             if self.type == .dictionary && newValue.error == nil {
-                self.rawDictionary[key] = newValue.object
+                if let i = self.rawDictionary.firstIndex(where: { $0.0 == key }) {
+                    self.rawDictionary[i] = (key, newValue.object)
+                } else {
+                    self.rawDictionary.append((key, newValue.object))
+                }
             }
         }
     }
@@ -809,7 +813,7 @@ extension JSON {
         get {
             switch self.type {
             case .dictionary:
-                return self.rawDictionary
+                return Dictionary(self.rawDictionary, uniquingKeysWith: { a,b in a })
             default:
                 return nil
             }
@@ -1293,7 +1297,7 @@ public func == (lhs: JSON, rhs: JSON) -> Bool {
     case (.array, .array):
         return lhs.rawArray as NSArray == rhs.rawArray as NSArray
     case (.dictionary, .dictionary):
-        return lhs.rawDictionary as NSDictionary == rhs.rawDictionary as NSDictionary
+        return lhs.dictionaryObject! as NSDictionary == rhs.dictionaryObject! as NSDictionary
     case (.null, .null):
         return true
     default:
@@ -1313,7 +1317,7 @@ public func <= (lhs: JSON, rhs: JSON) -> Bool {
     case (.array, .array):
         return lhs.rawArray as NSArray == rhs.rawArray as NSArray
     case (.dictionary, .dictionary):
-        return lhs.rawDictionary as NSDictionary == rhs.rawDictionary as NSDictionary
+        return lhs.dictionaryObject! as NSDictionary == rhs.dictionaryObject! as NSDictionary
     case (.null, .null):
         return true
     default:
@@ -1333,7 +1337,7 @@ public func >= (lhs: JSON, rhs: JSON) -> Bool {
     case (.array, .array):
         return lhs.rawArray as NSArray == rhs.rawArray as NSArray
     case (.dictionary, .dictionary):
-        return lhs.rawDictionary as NSDictionary == rhs.rawDictionary as NSDictionary
+        return lhs.dictionaryObject! as NSDictionary == rhs.dictionaryObject! as NSDictionary
     case (.null, .null):
         return true
     default:
